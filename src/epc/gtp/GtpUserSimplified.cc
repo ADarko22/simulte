@@ -35,6 +35,32 @@ void GtpUserSimplified::initialize(int stage)
     pgwAddress_ = L3AddressResolver().resolve("pgw");
 
     ownerType_ = selectOwnerType(getAncestorPar("nodeType"));
+
+    //mec
+    //@author Angelo Buono
+    //
+    // ENB SIDE
+    if(getParentModule()->hasPar("meHost")){
+
+        std::string meHost = getParentModule()->par("meHost").stringValue();
+        if(ownerType_ == ENB &&  strcmp(meHost.c_str(), "")){
+
+            std::stringstream meHostName;
+            meHostName << meHost.c_str() << ".gtpEndpoint";
+            meHostGtpEndpoint = meHostName.str();
+            meHostGtpEndpointAddress = inet::L3AddressResolver().resolve(meHostGtpEndpoint.c_str());
+
+            EV << "GtpUserSimplified::initialize - meHost: " << meHost << " meHostGtpEndpointAddress: " << meHostGtpEndpointAddress.str() << endl;
+
+            std::stringstream meHostName2;
+            meHostName2 << meHost.c_str() << ".virtualisationInfrastructure";
+            meHostVirtualisationInfrastructure = meHostName.str();
+            meHostVirtualisationInfrastructureAddress = inet::L3AddressResolver().resolve(meHostVirtualisationInfrastructure.c_str());
+
+            myMacNodeID = getParentModule()->par("macNodeId").longValue();
+        }
+    }
+
 }
 
 EpcNodeType GtpUserSimplified::selectOwnerType(const char * type)
@@ -44,6 +70,11 @@ EpcNodeType GtpUserSimplified::selectOwnerType(const char * type)
         return ENB;
     else if(strcmp(type,"PGW") == 0)
         return PGW;
+    //mec
+    //@author Angelo Buono
+    else if(strcmp(type, "GTPENDPOINT") == 0)
+        return GTPENDPOINT;
+    //end mec
 
     error("GtpUserSimplified::selectOwnerType - unknown owner type [%s]. Aborting...",type);
 }
@@ -95,6 +126,15 @@ void GtpUserSimplified::handleFromTrafficFlowFilter(IPv4Datagram * datagram)
         {
             tunnelPeerAddress = pgwAddress_;
         }
+        //mec
+        //@author Angelo Buono
+        else if(flowId == -3) // for ENB --> tunneling to the connected GTPENDPOINT (ME Host)
+        {
+            EV << "GtpUserSimplified::handleFromTrafficFlowFilter - tunneling from " << getParentModule()->getFullName() << " to " << meHostGtpEndpoint << endl;
+            tunnelPeerAddress = meHostGtpEndpointAddress;
+        }
+        //
+        //end mec
         else
         {
             // get the symbolic IP address of the tunnel destination ID
@@ -118,6 +158,7 @@ void GtpUserSimplified::handleFromUdp(GtpUserMsg * gtpMsg)
     {
         IPv4Address& destAddr = datagram->getDestAddress();
         MacNodeId destId = binder_->getMacNodeId(destAddr);
+
         if (destId != 0)
         {
              // create a new GtpUserSimplifiedMessage
@@ -134,6 +175,54 @@ void GtpUserSimplified::handleFromUdp(GtpUserMsg * gtpMsg)
              return;
         }
     }
+
+    //mec
+    //@author Angelo Buono
+    if(ownerType_== ENB){
+
+        IPv4Address& destAddr = datagram->getDestAddress();
+        MacNodeId destId = binder_->getMacNodeId(destAddr);
+        MacNodeId destMaster = binder_->getNextHop(destId);
+
+        EV << "GtpUserSimplified::handleFromUdp - DestMaster: " << destMaster << " (MacNodeId) my: " << myMacNodeID << " (MacNodeId)" << endl;
+
+        L3Address tunnelPeerAddress;
+        //checking if serving eNodeB it's --> send to the Radio-NIC
+        if(myMacNodeID == destMaster)
+        {
+            EV << "GtpUserSimplified::handleFromUdp - Datagram local delivery to " << destAddr.str() << endl;
+            // local delivery
+            send(datagram,"pppGate");
+            return;
+        }
+        else if(destAddr.operator ==(meHostVirtualisationInfrastructureAddress.toIPv4()))
+        {
+            //tunneling to the ME Host GtpEndpoint
+            EV << "GtpUserSimplified::handleFromUdp - Datagram for " << destAddr.str() << ": tunneling to (GTPENDPOINT) " << meHostGtpEndpointAddress.str() << endl;
+            tunnelPeerAddress = meHostGtpEndpointAddress;
+        }
+        else
+        {
+            //tunneling to the PGW
+            EV << "GtpUserSimplified::handleFromUdp - Datagram for " << destAddr.str() << ": tunneling to (PGW) " << pgwAddress_.str() << endl;
+            tunnelPeerAddress = pgwAddress_;
+        }
+
+        // create a new GtpUserSimplifiedMessage
+        GtpUserMsg * gtpMsg = new GtpUserMsg();
+        gtpMsg->setName("GtpUserMessage");
+        // encapsulate the datagram within the GtpUserSimplifiedMessage
+        gtpMsg->encapsulate(datagram);
+        socket_.sendTo(gtpMsg, tunnelPeerAddress, tunnelPeerPort_);
+
+    }
+    if(ownerType_== GTPENDPOINT)
+    {
+        //deliver to the MEHosto VirtualisationInfrastructure!
+        send(datagram,"pppGate");
+        return;
+    }
+    //end mec
 
     // destination is outside the LTE network
     send(datagram,"pppGate");

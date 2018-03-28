@@ -27,6 +27,25 @@ void TrafficFlowFilterSimplified::initialize(int stage)
 
     // reading and setting owner type
     ownerType_ = selectOwnerType(par("ownerType"));
+
+    //mec
+    //@author Angelo Buono
+    //
+    // ENB SIDE
+    if(getParentModule()->hasPar("meHost")){
+
+        meHost = getParentModule()->par("meHost").stringValue();
+        if(ownerType_ == ENB &&  strcmp(meHost.c_str(), "")){
+
+            std::stringstream meHostName;
+            meHostName << meHost.c_str() << ".virtualisationInfrastructure";
+            meHost = meHostName.str();
+            meHostAddress = inet::L3AddressResolver().resolve(meHost.c_str());
+
+            EV << "TrafficFlowFilterSimplified::initialize - meHost: " << meHost << " meHostAddress: " << meHostAddress.str() << endl;
+        }
+    }
+    //end mec
 }
 
 EpcNodeType TrafficFlowFilterSimplified::selectOwnerType(const char * type)
@@ -36,6 +55,11 @@ EpcNodeType TrafficFlowFilterSimplified::selectOwnerType(const char * type)
         return ENB;
     else if(strcmp(type,"PGW") == 0)
         return PGW;
+    //mec
+    //@author Angelo Buono
+    else if(strcmp(type, "GTPENDPOINT") == 0)
+        return GTPENDPOINT;
+    //end mec
 
     error("TrafficFlowFilterSimplified::selectOwnerType - unknown owner type [%s]. Aborting...",type);
 }
@@ -63,9 +87,9 @@ void TrafficFlowFilterSimplified::handleMessage(cMessage *msg)
         EV << "TrafficFlowFilterSimplified::handleMessage - Destination has been removed from the simulation. Delete packet." << endl;
         delete msg;
     }
+    //end mec
     else
     {
-
         // add control info to the normal ip datagram. This info will be read by the GTP-U application
         TftControlInfo * tftInfo = new TftControlInfo();
         tftInfo->setTft(tftId);
@@ -80,9 +104,31 @@ void TrafficFlowFilterSimplified::handleMessage(cMessage *msg)
 
 TrafficFlowTemplateId TrafficFlowFilterSimplified::findTrafficFlow(L3Address srcAddress, L3Address destAddress)
 {
+    //mec
+    //@author Angelo Buono
+    // check this before the other!
+    if (ownerType_ == ENB && destAddress.operator == (meHostAddress))
+    {
+        // the destination is the ME Host
+        EV << "TrafficFlowFilterSimplified::findTrafficFlow - returning flowId (-3) for tunneling to " << meHost << endl;
+        return -3;
+    }
+    else if(ownerType_ == GTPENDPOINT)
+    {
+        // send only messages direct to cars --> car[] has macNodeId != 0
+        MacNodeId destId = binder_->getMacNodeId(destAddress.toIPv4());
+        MacNodeId destMaster = binder_->getNextHop(destId);
+        EV << "TrafficFlowFilterSimplified::findTrafficFlow - returning flowId for " <<  binder_->getModuleNameByMacNodeId(destMaster) <<": "<< destMaster << endl;
+        return destMaster;
+    }
+    //end mec
+    //
+
     MacNodeId destId = binder_->getMacNodeId(destAddress.toIPv4());
     if (destId == 0)
     {
+        EV << "TrafficFlowFilterSimplified::findTrafficFlow - destId = "<< destId << endl;
+
         if (ownerType_ == ENB)
             return -1;   // the destination is outside the LTE network, so send the packet to the PGW
         else // PGW
