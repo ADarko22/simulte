@@ -104,6 +104,15 @@ class LteMacEnbD2D : public LteMacEnb
     void sendModeSwitchNotification(MacNodeId srcId, MacNodeId dst, LteD2DMode oldMode, LteD2DMode newMode);
 
     bool isMsHarqInterrupt() { return msHarqInterrupt_; }
+
+    /*
+     * getter
+     */
+    UserTxParams* getPreconfiguredTxParams(){
+
+        return preconfiguredTxParams_;
+    }
+
 };
 
 #endif
