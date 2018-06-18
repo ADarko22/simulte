@@ -30,6 +30,10 @@ simple MultihopD2DStatistics {
     @statistic[d2dMultihopEventTrickleSuppressedMsg](title="Avg suppressed transmissions for broadcasting a message"; unit=""; source="d2dMultihopEventTrickleSuppressedMsg"; record=stats);  
     @signal[d2dMultihopEventRcvdDupMsg];
     @statistic[d2dMultihopEventRcvdDupMsg](title="Avg num of duplicates within the area"; unit=""; source="d2dMultihopEventRcvdDupMsg"; record=stats);   
-     
+    
+    @signal[d2dMultihopEventCompleteDeliveries];
+    @statistic[d2dMultihopEventCompleteDeliveries](title="Avg complete-deliveries within the area"; unit=""; source="d2dMultihopEventCompleteDeliveries"; record=stats);   
+    
+    
     @display("i=block/cogwheel");
 }
