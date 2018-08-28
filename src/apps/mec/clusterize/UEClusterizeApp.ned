@@ -50,7 +50,7 @@ simple UEClusterizeApp like IUDPApp
         //resource required infos
         int requiredRam @unit("B") = default(10MB);
         int requiredDisk @unit("B") = default(100MB);
-        double requiredCpu = default(0.01);
+        double requiredCpu = default(0.001);
         
         //autoscheduling timers
         double period @unit("s") = default(0.02s);

@@ -301,8 +301,7 @@ void UEClusterizeApp::handleMEAppAckStart(MEAppPacket* pkt){
     //starting sending INFO_UEAPP ClusterizeInfoPacket
     if(!selfSender_->isScheduled())
     {
-        double st = simTime().dbl() + period_.dbl();
-        st += 3;    //waiting for all to start
+        double st = ceil(simTime().dbl());    //waiting for all to start
         scheduleAt(st, selfSender_);
         EV << "UEClusterizeApp::handleMEAppAckStart - \t starting sendClusterizeStartPacket() at " << st << endl;
     }
